@@ -2,6 +2,7 @@ package eu.studiodeanna.openchecklists.sync
 
 import eu.studiodeanna.openchecklists.Messages
 import eu.studiodeanna.openchecklists.google.GoogleAuth
+import eu.studiodeanna.openchecklists.google.GoogleFileAccessRequired
 import eu.studiodeanna.openchecklists.google.GoogleSignInRequired
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
@@ -106,7 +107,10 @@ class GoogleDriveApi(private val auth: GoogleAuth, private val http: HttpClient)
         return "https://drive.google.com/file/d/$id/view?usp=sharing"
     }
 
-    /** The first of "Title.json", "Title (2).json", … not yet in the top folder of the user's Drive. */
+    /**
+     * The first of "Title.json", "Title (2).json", … not yet in the top folder of the user's Drive.
+     * Drive only lists the files this app may use, so other files of the same name are not seen.
+     */
     private suspend fun unusedName(title: String): String {
         for (n in 1..MAX_NUMBER) {
             val name = listFileName(title, n)
@@ -146,18 +150,25 @@ class GoogleDriveApi(private val auth: GoogleAuth, private val http: HttpClient)
             if (response.status == HttpStatusCode.Unauthorized && attempt == 0) {
                 token = auth.accessToken(forceRefresh = true) ?: throw GoogleSignInRequired()
             } else {
-                fail(response, writing)
+                fail(response, writing, link)
             }
         }
         throw GoogleSignInRequired()
     }
 
-    private suspend fun fail(response: HttpResponse, writing: Boolean): Nothing {
-        val detail = runCatching {
-            json.parseToJsonElement(response.bodyAsText()).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
-        }.getOrNull()
+    /**
+     * With the `drive.file` scope, a file the user has not picked for the app answers "not found" (or
+     * "app not authorized"), the same as a file they cannot see at all; picking it tells the two apart.
+     */
+    private suspend fun fail(response: HttpResponse, writing: Boolean, link: ParsedLink.GoogleDrive?): Nothing {
+        val error = runCatching { json.parseToJsonElement(response.bodyAsText()).jsonObject["error"]?.jsonObject }.getOrNull()
+        val detail = error?.get("message")?.jsonPrimitive?.content
+        val reason = runCatching { error?.get("errors")?.jsonArray?.firstOrNull()?.jsonObject?.get("reason")?.jsonPrimitive?.content }
+            .getOrNull()
         throw when (response.status) {
             HttpStatusCode.Unauthorized -> GoogleSignInRequired()
+            HttpStatusCode.NotFound if link != null -> GoogleFileAccessRequired(link.fileId)
+            HttpStatusCode.Forbidden if link != null && reason == "appNotAuthorizedToFile" -> GoogleFileAccessRequired(link.fileId)
             HttpStatusCode.NotFound -> RemoteException(Messages.current.driveNotFound)
             HttpStatusCode.Forbidden if writing -> RemoteException(Messages.current.driveReadOnly(detail))
             else -> RemoteException(Messages.current.driveAnswered(response.status.value, detail))

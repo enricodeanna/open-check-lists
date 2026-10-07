@@ -44,6 +44,7 @@ interface Strings {
     val removeChecked: String
     val deleteList: String
     val signIn: String
+    val chooseFile: String
     val retry: String
     val sectionNameHint: String
     val renameSection: String
@@ -123,7 +124,7 @@ object EnglishStrings : Strings {
     override val noLists = "No lists yet.\nStart a new one, or open a list someone shared with you."
     override val openShared = "Open a shared list"
     override val openSharedIntro = "Paste the Nextcloud or Google Drive link you were sent. " +
-        "For a Google Drive link you sign in with your Google account."
+        "For a Google Drive link, Google then asks you to sign in and to choose the list's file."
     override val signOutOfGoogle = "Sign out of Google"
     override val emptyList = "Empty"
     override fun doneOf(done: Int, total: Int) = "$done of $total done"
@@ -136,6 +137,7 @@ object EnglishStrings : Strings {
     override val removeChecked = "Remove checked items"
     override val deleteList = "Delete list"
     override val signIn = "Sign in"
+    override val chooseFile = "Choose file"
     override val retry = "Retry"
     override val sectionNameHint = "Name, e.g. Produce"
     override val renameSection = "Rename section"
@@ -233,7 +235,7 @@ object ItalianStrings : Strings {
     override val noLists = "Ancora nessuna lista.\nCreane una nuova, o apri una lista che qualcuno ha condiviso con te."
     override val openShared = "Apri una lista condivisa"
     override val openSharedIntro = "Incolla il link di Nextcloud o Google Drive che hai ricevuto. " +
-        "Per un link di Google Drive accedi con il tuo account Google."
+        "Per un link di Google Drive, Google ti chiede poi di accedere e di scegliere il file della lista."
     override val signOutOfGoogle = "Esci da Google"
     override val emptyList = "Vuota"
     override fun doneOf(done: Int, total: Int) = "$done di $total fatti"
@@ -246,6 +248,7 @@ object ItalianStrings : Strings {
     override val removeChecked = "Rimuovi gli elementi spuntati"
     override val deleteList = "Elimina lista"
     override val signIn = "Accedi"
+    override val chooseFile = "Scegli file"
     override val retry = "Riprova"
     override val sectionNameHint = "Nome, es. Frutta e verdura"
     override val renameSection = "Rinomina sezione"

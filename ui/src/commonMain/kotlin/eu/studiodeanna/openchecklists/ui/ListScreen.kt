@@ -295,14 +295,19 @@ fun ListScreen(repository: ChecklistRepository, id: String, onBack: () -> Unit) 
             ) {
                 (entry.sync as? SyncState.Failed)?.let { failed ->
                     item(key = "sync-error") {
+                        val pick = failed.pickFile
                         SyncErrorBanner(
                             message = failed.message,
-                            action = if (failed.needsSignIn) strings.signIn else strings.retry,
+                            action = when {
+                                failed.needsSignIn -> strings.signIn
+                                pick != null -> strings.chooseFile
+                                else -> strings.retry
+                            },
                             onAction = {
-                                if (failed.needsSignIn) {
-                                    scope.launch { runCatching { repository.signInToGoogle() } }
-                                } else {
-                                    repository.syncNow(id)
+                                when {
+                                    failed.needsSignIn -> scope.launch { runCatching { repository.signInToGoogle() } }
+                                    pick != null -> scope.launch { runCatching { repository.pickGoogleFile(pick) } }
+                                    else -> repository.syncNow(id)
                                 }
                             },
                         )
@@ -436,6 +441,7 @@ fun ListScreen(repository: ChecklistRepository, id: String, onBack: () -> Unit) 
                 intro = strings.shareHelp,
                 onDismiss = { dialog = null },
                 signIn = repository::signInToGoogle,
+                pickFile = repository::pickGoogleFile,
                 connect = { link -> repository.attachLink(id, link) },
                 createDriveLink = if (repository.googleAvailable) {
                     { repository.shareViaGoogleDrive(id) }

@@ -57,7 +57,26 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
     }
 
     override suspend fun signIn() {
-        var result = authorize()
+        resolve(authorize())
+    }
+
+    /** Google's consent screen followed by its file picker, which shows only [fileId]. */
+    override suspend fun pickFile(fileId: String) {
+        val picker = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(GoogleOAuthConfig.DRIVE_SCOPE)))
+            .setOptOutIncludingGrantedScopes(true)
+            .setPrompt(AuthorizationRequest.Prompt.CONSENT)
+            .addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_OAUTH_TRIGGER, "true")
+            .addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_FILE_IDS, fileId)
+            .build()
+        val result = resolve(authorize(picker))
+        val picked = result.tokenResponseParams?.getString("picked_file_ids").orEmpty().split(',')
+        if (fileId !in picked) throw RemoteException(Messages.current.driveFileNotPicked)
+    }
+
+    /** Shows Google's screens if [first] needs them, and keeps the token it ends with. */
+    private suspend fun resolve(first: AuthorizationResult): AuthorizationResult {
+        var result = first
         if (result.hasResolution()) {
             val launcher = launcher ?: throw RemoteException(Messages.current.openAppToSignIn)
             val deferred = CompletableDeferred<ActivityResult>().also { pending = it }
@@ -71,6 +90,7 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
         }
         token = result.accessToken ?: throw RemoteException(Messages.current.signInRetry)
         setSignedIn(true)
+        return result
     }
 
     override suspend fun signOut() {
@@ -79,8 +99,8 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
         setSignedIn(false)
     }
 
-    private suspend fun authorize(): AuthorizationResult = try {
-        client.authorize(request).await()
+    private suspend fun authorize(with: AuthorizationRequest = request): AuthorizationResult = try {
+        client.authorize(with).await()
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

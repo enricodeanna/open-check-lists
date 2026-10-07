@@ -36,6 +36,9 @@ interface Messages {
     val driveNotFound: String
     fun driveReadOnly(detail: String?): String
     fun driveAnswered(status: Int, detail: String?): String
+    val driveChooseFile: String
+    val driveFileNotPicked: String
+    val pickerCouldNotLoad: String
 
     val signInToSync: String
     val signInCancelled: String
@@ -97,6 +100,11 @@ object EnglishMessages : Messages {
             (detail?.let { " ($it)" } ?: "")
     override fun driveAnswered(status: Int, detail: String?) =
         "Google Drive answered $status" + (detail?.let { ": $it" } ?: ".")
+    override val driveChooseFile = "Choose this list's file in Google Drive, so the app may open it."
+    override val driveFileNotPicked =
+        "The list's file was not chosen. If Google showed no file, ask the owner to share it with " +
+            "“Anyone with the link” as “Editor”."
+    override val pickerCouldNotLoad = "Google's file picker could not load. Check the connection and reload the page."
 
     override val signInToSync = "Sign in to Google to sync this list."
     override val signInCancelled = "Sign-in was cancelled."
@@ -156,6 +164,12 @@ object ItalianMessages : Messages {
             "condivisione tramite link su “Editor”." + (detail?.let { " ($it)" } ?: "")
     override fun driveAnswered(status: Int, detail: String?) =
         "Google Drive ha risposto $status" + (detail?.let { ": $it" } ?: ".")
+    override val driveChooseFile = "Scegli il file di questa lista in Google Drive, così l'app può aprirlo."
+    override val driveFileNotPicked =
+        "Il file della lista non è stato scelto. Se Google non mostrava nessun file, chiedi al proprietario di " +
+            "condividerlo con “Chiunque abbia il link” come “Editor”."
+    override val pickerCouldNotLoad =
+        "Impossibile caricare la scelta file di Google. Controlla la connessione e ricarica la pagina."
 
     override val signInToSync = "Accedi a Google per sincronizzare questa lista."
     override val signInCancelled = "Accesso annullato."

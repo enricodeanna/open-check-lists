@@ -45,6 +45,7 @@ import eu.studiodeanna.openchecklists.model.Section
 import eu.studiodeanna.openchecklists.store.LanguageChoice
 import eu.studiodeanna.openchecklists.store.Settings
 import eu.studiodeanna.openchecklists.store.ThemeChoice
+import eu.studiodeanna.openchecklists.google.GoogleFileAccessRequired
 import eu.studiodeanna.openchecklists.google.GoogleSignInRequired
 import eu.studiodeanna.openchecklists.sync.RemoteException
 import eu.studiodeanna.openchecklists.sync.ShareLink
@@ -101,7 +102,7 @@ fun ConfirmDialog(title: String, message: String, confirm: String, onDismiss: ()
 /**
  * Asks for a share link and password, then runs [connect]; stays open showing the error if that
  * fails, and closes on success. [createDriveLink], when given, offers making a new Google Drive
- * file instead. Either action signs in to Google first if it has to.
+ * file instead. Either action signs in to Google, or shows Google's file picker, if it has to.
  */
 @Composable
 fun LinkDialog(
@@ -109,6 +110,7 @@ fun LinkDialog(
     intro: String,
     onDismiss: () -> Unit,
     signIn: suspend () -> Unit,
+    pickFile: suspend (fileId: String) -> Unit,
     connect: suspend (ShareLink) -> Unit,
     createDriveLink: (suspend () -> Unit)? = null,
 ) {
@@ -118,18 +120,27 @@ fun LinkDialog(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    // Each Google step is needed at most once: a sign-in, then the picker for someone else's file.
+    suspend fun withGoogle(action: suspend () -> Unit) {
+        repeat(2) {
+            try {
+                return action()
+            } catch (_: GoogleSignInRequired) {
+                signIn()
+            } catch (e: GoogleFileAccessRequired) {
+                pickFile(e.fileId)
+            }
+        }
+        action()
+    }
+
     fun run(action: suspend () -> Unit) {
         if (busy) return
         busy = true
         error = null
         scope.launch {
             try {
-                try {
-                    action()
-                } catch (_: GoogleSignInRequired) {
-                    signIn()
-                    action()
-                }
+                withGoogle(action)
                 onDismiss()
             } catch (e: RemoteException) {
                 error = e.message

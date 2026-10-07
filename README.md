@@ -52,12 +52,18 @@ in `ic_launcher_background.xml`). After changing them, run `art/render-icons.sh`
 
 Open the list, tap the share icon, and choose **Create a Google Drive link**. The app creates a
 file in your Drive, named after the list (`Groceries.json`, numbered if that name exists), sets it to "anyone with the link can edit", and syncs the list into it. Send
-the link to the others. They choose **Open a shared list**, paste it, and sign in with any Google
-account. Google does not allow anonymous edits, so everyone who edits signs in.
+the link to the others. They choose **Open a shared list** and paste it. Google then shows its sign-in
+and its file picker, showing just that file; they tap it, and the list opens. Google does not allow
+anonymous edits, so everyone who edits signs in.
+
+The app asks Google only for `drive.file`: access to the files it created and the files the user
+picked for it, nothing else in their Drive. That is why someone else's file is picked once. Each
+person picks it once per Google account, not once per device. If access is later removed (in the
+Google account's settings, say), the list shows **Choose file** to pick it again.
 
 An existing Drive file works too: it must be a plain file (not a Google Doc), empty or a list
-from this app, and shared as "anyone with the link: Editor". Older links containing
-`resourcekey=` must be pasted whole.
+from this app, and shared as "anyone with the link: Editor". It is picked like any other shared
+file, also by its owner. Older links containing `resourcekey=` must be pasted whole.
 
 ### Nextcloud
 
@@ -91,12 +97,13 @@ not be used on current servers; Nextcloud 34 answers there with a folder that is
 Google Drive needs a Google Cloud project with OAuth clients. Until one is configured, builds
 simply hide the Drive button.
 
-1. At https://console.cloud.google.com create a project and enable the **Google Drive API**.
+1. At https://console.cloud.google.com create a project and enable the **Google Drive API** and
+   the **Google Picker API**.
 2. **OAuth consent screen**: External, app name "Open Check Lists", and add the scope
-   `https://www.googleapis.com/auth/drive`. While the app is in *Testing*, only listed test users
-   can sign in, and their sign-in lasts 7 days. *Publishing* it without Google's review works for
-   up to 100 users, who see an "unverified app" warning. A public release needs Google's review
-   of this restricted scope, which includes a paid security assessment.
+   `https://www.googleapis.com/auth/drive.file`. While the app is in *Testing*, only listed test
+   users can sign in, and their sign-in lasts 7 days. `drive.file` is a non-sensitive scope, so a
+   public release needs only Google's basic app verification (a privacy policy, a home page, a
+   verified domain), not the security assessment the full `drive` scope would need.
 3. **Create OAuth client IDs**:
    - *Desktop app*: gives a client id and secret.
    - *Android*: package `eu.studiodeanna.openchecklists`, plus the SHA-1 of the signing
@@ -106,21 +113,24 @@ simply hide the Drive button.
    - *iOS*: bundle id `eu.studiodeanna.openchecklists`.
    - *Web application*: add the web app's address (and `http://localhost:8080` for development)
      under *Authorized JavaScript origins*.
+   - *API key* (web only, for the file picker): restrict it to the Google Picker API and to the
+     web app's address.
 4. Put the desktop, iOS and web ids in `GoogleOAuthConfig`
-   (`shared/src/commonMain/kotlin/eu/studiodeanna/openchecklists/google/GoogleAuth.kt`). Android
-   needs no id in code; set `ANDROID_CLIENT_REGISTERED = true` there instead.
+   (`shared/src/commonMain/kotlin/eu/studiodeanna/openchecklists/google/GoogleAuth.kt`), plus the
+   web API key and the project number (on the Cloud console's dashboard). Android needs no id in
+   code; set `ANDROID_CLIENT_REGISTERED = true` there instead.
 
 The desktop app also reads `OPENCHECKLISTS_GOOGLE_CLIENT_ID` and
 `OPENCHECKLISTS_GOOGLE_CLIENT_SECRET` from the environment, to try a project without rebuilding.
 
 How each platform signs in:
 
-| Platform | Sign-in                                         | Where the sign-in is kept                    |
-|----------|-------------------------------------------------|----------------------------------------------|
-| Android  | Google Play services                            | Play services                                |
-| Desktop  | Default browser, reply via `127.0.0.1` (PKCE)   | `google-session.json` in the data directory  |
-| iOS      | System web-authentication sheet (PKCE)          | `google-session.json` in Documents           |
-| Web      | Google Identity Services popup                  | Memory only; lasts about an hour             |
+| Platform | Sign-in and file picker                                       | Where the sign-in is kept                    |
+|----------|---------------------------------------------------------------|----------------------------------------------|
+| Android  | Google Play services (`PICKER_*` resource parameters)         | Play services                                |
+| Desktop  | Default browser, reply via `127.0.0.1` (PKCE, `trigger_onepick`) | `google-session.json` in the data directory |
+| iOS      | System web-authentication sheet (PKCE, `trigger_onepick`)     | `google-session.json` in Documents           |
+| Web      | Google Identity Services popup, then the Picker API           | Memory only; lasts about an hour             |
 
 ## How edits from several people combine
 
@@ -145,9 +155,13 @@ Android also on resume. Delete markers older than 90 days are dropped.
 
 ## Known limits
 
-- **Google Drive sign-in has not been tried against Google yet.** It needs the OAuth clients
-  above. Drive sync is tested against a simulated Drive (`FakeGoogleDrive`), and the PKCE
-  pieces against the RFC test vectors.
+- **Google Drive sign-in and the file picker have not been tried against Google yet.** They need
+  the OAuth clients above. Drive sync is tested against a simulated Drive (`FakeGoogleDrive`,
+  which follows the `drive.file` rules), and the PKCE pieces against the RFC test vectors. To
+  check first: that the picker shows a file shared by link that the user never opened in Drive
+  (Google documents that a file the user cannot access is left out); that a file picked on one
+  device is usable on the user's others, as all clients belong to one Cloud project; and that iOS
+  accepts `trigger_onepick`, as Google documents the picker for desktop, Android and web only.
 - **iOS** code (including its sign-in) has not been compiled, because that needs a Mac.
 - The desktop and iOS sign-ins store the refresh token in a plain file in the app's data
   directory. Moving it to the OS keychain is a future improvement.

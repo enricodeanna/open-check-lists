@@ -41,8 +41,12 @@ class WebSessionGoogleAuth(clientId: String, store: FileStore, http: HttpClient)
     override suspend fun accessToken(forceRefresh: Boolean): String? =
         oauth.accessToken(forceRefresh).also { state.value = it != null }
 
-    override suspend fun signIn() {
-        val request = oauth.newRequest("$scheme:/oauth2redirect")
+    override suspend fun signIn() = authorize(pickFileId = null)
+
+    override suspend fun pickFile(fileId: String) = authorize(fileId)
+
+    private suspend fun authorize(pickFileId: String?) {
+        val request = oauth.newRequest("$scheme:/oauth2redirect", pickFileId)
         val callback = withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val sheet = ASWebAuthenticationSession(NSURL(string = request.url), scheme) { url, _ ->
@@ -56,8 +60,12 @@ class WebSessionGoogleAuth(clientId: String, store: FileStore, http: HttpClient)
                 if (!sheet.start()) cont.resumeWithException(RemoteException(Messages.current.signInCouldNotStart))
             }
         }
-        oauth.complete(request, PkceOAuthClient.queryParams(callback))
-        state.value = oauth.accessToken(forceRefresh = false) != null
+        try {
+            oauth.complete(request, PkceOAuthClient.queryParams(callback))
+        } finally {
+            // A picker request signs in even when the file is not picked.
+            state.value = oauth.hasSession()
+        }
     }
 
     override suspend fun signOut() {

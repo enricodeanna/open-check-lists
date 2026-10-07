@@ -147,6 +147,7 @@ fun ListsScreen(repository: ChecklistRepository, onOpen: (String) -> Unit) {
             intro = strings.openSharedIntro,
             onDismiss = { joining = false },
             signIn = repository::signInToGoogle,
+            pickFile = repository::pickGoogleFile,
             connect = { link ->
                 try {
                     onOpen(repository.openShared(link))

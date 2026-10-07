@@ -11,7 +11,9 @@ import kotlinx.coroutines.MainScope
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val google = GoogleOAuthConfig.WEB_CLIENT_ID.takeIf { it.isNotEmpty() }?.let { GisGoogleAuth(it) }
+    val google = GoogleOAuthConfig.WEB_CLIENT_ID.takeIf { it.isNotEmpty() }?.let {
+        GisGoogleAuth(it, GoogleOAuthConfig.WEB_API_KEY, GoogleOAuthConfig.CLOUD_PROJECT_NUMBER)
+    }
     val repository = ChecklistRepository(LocalStorageFileStore(), MainScope(), google = google)
     ComposeViewport { OpenCheckListsApp(repository) }
 }

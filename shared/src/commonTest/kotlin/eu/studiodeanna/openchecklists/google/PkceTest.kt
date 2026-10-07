@@ -1,7 +1,19 @@
 package eu.studiodeanna.openchecklists.google
 
+import eu.studiodeanna.openchecklists.Messages
+import eu.studiodeanna.openchecklists.store.MemoryFileStore
+import eu.studiodeanna.openchecklists.sync.RemoteException
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.headersOf
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PkceTest {
     private fun hex(bytes: ByteArray) = bytes.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
@@ -39,5 +51,45 @@ class PkceTest {
             mapOf("state" to "s2", "code" to "c"),
             PkceOAuthClient.queryParams("com.googleusercontent.apps.123-abc:/oauth2redirect?state=s2&code=c#"),
         )
+    }
+
+    private fun client() = PkceOAuthClient(
+        "id",
+        null,
+        MemoryFileStore(),
+        HttpClient(MockEngine {
+            respond(
+                """{"access_token":"a","expires_in":3600,"refresh_token":"r"}""",
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }),
+        now = { 0L },
+    )
+
+    @Test
+    fun aPickerRequestAsksForTheFile() {
+        val oauth = client()
+        val plain = PkceOAuthClient.queryParams(oauth.newRequest("http://127.0.0.1:5000").url)
+        assertFalse("trigger_onepick" in plain)
+        assertEquals("https://www.googleapis.com/auth/drive.file", plain["scope"])
+
+        val picker = PkceOAuthClient.queryParams(oauth.newRequest("http://127.0.0.1:5000", pickFileId = "f1").url)
+        assertEquals("true", picker["trigger_onepick"])
+        assertEquals("f1", picker["file_ids"])
+        assertEquals("consent", picker["prompt"])
+    }
+
+    @Test
+    fun aFileThatWasNotPickedIsReportedButTheSignInIsKept() = runTest {
+        val oauth = client()
+        val request = oauth.newRequest("http://127.0.0.1:5000", pickFileId = "f1")
+        val error = assertFailsWith<RemoteException> {
+            oauth.complete(request, mapOf("state" to request.state, "code" to "c", "picked_file_ids" to "f2"))
+        }
+        assertEquals(Messages.current.driveFileNotPicked, error.message)
+        assertTrue(oauth.hasSession())
+
+        val again = oauth.newRequest("http://127.0.0.1:5000", pickFileId = "f1")
+        oauth.complete(again, mapOf("state" to again.state, "code" to "c", "picked_file_ids" to "f2,f1"))
     }
 }

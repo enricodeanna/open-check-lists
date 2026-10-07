@@ -35,7 +35,11 @@ class LoopbackGoogleAuth(
     override suspend fun accessToken(forceRefresh: Boolean): String? =
         oauth.accessToken(forceRefresh).also { state.value = it != null }
 
-    override suspend fun signIn() {
+    override suspend fun signIn() = authorize(pickFileId = null)
+
+    override suspend fun pickFile(fileId: String) = authorize(fileId)
+
+    private suspend fun authorize(pickFileId: String?) {
         val reply = CompletableDeferred<Map<String, String>>()
         val server = withContext(Dispatchers.IO) {
             HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
@@ -50,15 +54,19 @@ class LoopbackGoogleAuth(
         }
         server.start()
         try {
-            val request = oauth.newRequest("http://127.0.0.1:${server.address.port}")
+            val request = oauth.newRequest("http://127.0.0.1:${server.address.port}", pickFileId)
             openBrowser(request.url)
             val params = try {
                 withTimeout(5 * 60_000) { reply.await() }
             } catch (e: TimeoutCancellationException) {
                 throw RemoteException(Messages.current.signInTimedOut, e)
             }
-            oauth.complete(request, params)
-            state.value = oauth.accessToken(forceRefresh = false) != null
+            try {
+                oauth.complete(request, params)
+            } finally {
+                // A picker request signs in even when the file is not picked.
+                state.value = oauth.hasSession()
+            }
         } finally {
             server.stop(0)
         }

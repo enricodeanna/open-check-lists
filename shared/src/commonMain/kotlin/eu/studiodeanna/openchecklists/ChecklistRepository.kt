@@ -16,8 +16,10 @@ import eu.studiodeanna.openchecklists.store.Library
 import eu.studiodeanna.openchecklists.store.LibraryEntry
 import eu.studiodeanna.openchecklists.store.Settings
 import eu.studiodeanna.openchecklists.google.GoogleAuth
+import eu.studiodeanna.openchecklists.google.GoogleFileAccessRequired
 import eu.studiodeanna.openchecklists.google.GoogleSignInRequired
 import eu.studiodeanna.openchecklists.sync.GoogleDriveApi
+import eu.studiodeanna.openchecklists.sync.ParsedLink
 import eu.studiodeanna.openchecklists.sync.RemoteException
 import eu.studiodeanna.openchecklists.sync.ShareLinks
 import eu.studiodeanna.openchecklists.sync.SharedList
@@ -47,8 +49,11 @@ sealed interface SyncState {
     data object LocalOnly : SyncState
     data object Syncing : SyncState
     data class Synced(val at: Long) : SyncState
-    /** [needsSignIn]: a Google Drive list that syncs again once the user signs in. */
-    data class Failed(val message: String, val needsSignIn: Boolean = false) : SyncState
+    /**
+     * [needsSignIn]: a Google Drive list that syncs again once the user signs in. [pickFile]: one that
+     * syncs once the user picks its file, with that id, in Google's file picker.
+     */
+    data class Failed(val message: String, val needsSignIn: Boolean = false, val pickFile: String? = null) : SyncState
 }
 
 /** [collapsed]: the sections folded away on this device. [history]: this device's edits, to undo and redo. */
@@ -216,10 +221,14 @@ class ChecklistRepository(
      * or password is reported instead of leaving an empty list behind. A shared folder may hold
      * several lists: with one it is opened, with more [ListChoiceNeeded] lists them, and the caller
      * opens one by passing its [ShareLink.fileName]. A list that is already here is not added twice.
+     * A Google Drive link throws [GoogleFileAccessRequired] until the user has picked its file.
      */
     suspend fun openShared(link: ShareLink): String {
         var target = ShareLinks.normalize(link)
         existingWith(target)?.let { return it }
+        val driveLink = ShareLinks.parse(target.url) as? ParsedLink.GoogleDrive
+        // Google's file picker signs in too, so a signed-out user sees one Google page, not two.
+        if (driveLink != null && google != null && !google.signedIn.value) throw GoogleFileAccessRequired(driveLink.fileId)
         val share = nextcloudShareFor(target, http)
         if (share != null && target.fileName == null) {
             share.resolve()
@@ -289,6 +298,18 @@ class ChecklistRepository(
         _lists.value.filter { (it.sync as? SyncState.Failed)?.needsSignIn == true }.forEach { syncNow(it.id) }
     }
 
+    /**
+     * Shows Google's file picker for [fileId], so this user's app may use a file someone shared, then
+     * retries the lists that were waiting for it or for a sign-in.
+     */
+    suspend fun pickGoogleFile(fileId: String) {
+        val auth = google ?: throw RemoteException(Messages.current.driveNotSetUp)
+        auth.pickFile(fileId)
+        _lists.value.filter { entry ->
+            (entry.sync as? SyncState.Failed)?.let { it.needsSignIn || it.pickFile == fileId } == true
+        }.forEach { syncNow(it.id) }
+    }
+
     suspend fun signOutOfGoogle() {
         google?.signOut()
     }
@@ -324,7 +345,11 @@ class ChecklistRepository(
                 saveLibrary()
                 if (changedMeanwhile) scheduleSync(id, syncDelayMillis)
             } catch (e: RemoteException) {
-                val failed = SyncState.Failed(e.message ?: Messages.current.syncFailed, needsSignIn = e is GoogleSignInRequired)
+                val failed = SyncState.Failed(
+                    e.message ?: Messages.current.syncFailed,
+                    needsSignIn = e is GoogleSignInRequired,
+                    pickFile = (e as? GoogleFileAccessRequired)?.fileId,
+                )
                 updateEntry(id) { it.copy(sync = failed) }
             }
         }

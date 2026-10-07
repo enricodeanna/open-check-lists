@@ -2,6 +2,7 @@
 
 package eu.studiodeanna.openchecklists.google
 
+import eu.studiodeanna.openchecklists.Messages
 import eu.studiodeanna.openchecklists.currentTimeMillis
 import eu.studiodeanna.openchecklists.sync.RemoteException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,8 +15,10 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * Browser sign-in through Google Identity Services (the `gsi/client` script in index.html). Google
  * gives browser apps no refresh token, so the token lasts about an hour and lives only in memory;
  * after that, or after a reload, the user taps "Sign in" again (usually a popup that closes itself).
+ * The file picker is Google's Picker API (the `api.js` script), which needs [apiKey] and the Cloud
+ * project's number, [appId], so that a picked file is granted to this app.
  */
-class GisGoogleAuth(private val clientId: String) : GoogleAuth {
+class GisGoogleAuth(private val clientId: String, private val apiKey: String, private val appId: String) : GoogleAuth {
     private var token: String? = null
     private var expiresAt = 0L
     private val state = MutableStateFlow(false)
@@ -46,6 +49,25 @@ class GisGoogleAuth(private val clientId: String) : GoogleAuth {
         }
     }
 
+    override suspend fun pickFile(fileId: String) {
+        if (apiKey.isEmpty() || appId.isEmpty()) throw RemoteException(Messages.current.driveNotSetUp)
+        val current = accessToken() ?: run {
+            signIn()
+            token ?: throw RemoteException(Messages.current.signInRetry)
+        }
+        val picked = suspendCancellableCoroutine { cont ->
+            showPicker(
+                apiKey,
+                appId,
+                current,
+                fileId,
+                onDone = { ids -> cont.resume(ids) },
+                onError = { cont.resumeWithException(RemoteException(Messages.current.pickerCouldNotLoad)) },
+            )
+        }
+        if (fileId !in picked.split(',')) throw RemoteException(Messages.current.driveFileNotPicked)
+    }
+
     override suspend fun signOut() {
         token?.let(::revokeToken)
         token = null
@@ -70,6 +92,44 @@ private fun requestToken(
         callback: (r) => r.error ? onError(r.error_description || r.error) : onToken(r.access_token, Number(r.expires_in)),
         error_callback: (e) => onError(e.type === 'popup_closed' ? 'Sign-in was cancelled.' : (e.message || 'Google sign-in failed.')),
     }).requestAccessToken();
+}""",
+)
+
+/** Shows the picker with only [fileId] in it; [onDone] gets the picked ids, comma-separated, or "" if cancelled. */
+private fun showPicker(
+    apiKey: String,
+    appId: String,
+    token: String,
+    fileId: String,
+    onDone: (String) -> Unit,
+    onError: () -> Unit,
+): Unit = js(
+    """{
+    if (!window.gapi) {
+        onError();
+        return;
+    }
+    gapi.load('picker', {
+        callback: () => {
+            const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setFileIds(fileId);
+            new google.picker.PickerBuilder()
+                .addView(view)
+                .setOAuthToken(token)
+                .setDeveloperKey(apiKey)
+                .setAppId(appId)
+                .setCallback((data) => {
+                    const action = data[google.picker.Response.ACTION];
+                    if (action === google.picker.Action.PICKED) {
+                        onDone(data[google.picker.Response.DOCUMENTS].map((d) => d[google.picker.Document.ID]).join(','));
+                    } else if (action === google.picker.Action.CANCEL) {
+                        onDone('');
+                    }
+                })
+                .build()
+                .setVisible(true);
+        },
+        onerror: () => onError(),
+    });
 }""",
 )
 

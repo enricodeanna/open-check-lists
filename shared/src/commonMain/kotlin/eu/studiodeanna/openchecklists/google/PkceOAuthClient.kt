@@ -29,7 +29,13 @@ class PkceOAuthClient(
     private val http: HttpClient,
     private val now: () -> Long,
 ) {
-    class AuthRequest(val url: String, val redirectUri: String, val state: String, val verifier: String)
+    class AuthRequest(
+        val url: String,
+        val redirectUri: String,
+        val state: String,
+        val verifier: String,
+        val pickFileId: String? = null,
+    )
 
     @Serializable
     private data class Saved(val refreshToken: String)
@@ -51,8 +57,12 @@ class PkceOAuthClient(
         return refreshToken != null
     }
 
+    /**
+     * A sign-in request. With [pickFileId], Google's file picker follows the sign-in, showing only
+     * that file, and picking it lets the app use it.
+     */
     @OptIn(ExperimentalUuidApi::class)
-    fun newRequest(redirectUri: String): AuthRequest {
+    fun newRequest(redirectUri: String, pickFileId: String? = null): AuthRequest {
         // Uuid.random() is backed by a cryptographically secure generator on every platform.
         val verifier = Uuid.random().toHexString() + Uuid.random().toHexString()
         val state = Uuid.random().toHexString()
@@ -66,11 +76,18 @@ class PkceOAuthClient(
             parameters.append("state", state)
             parameters.append("access_type", "offline")
             parameters.append("prompt", "consent")
+            if (pickFileId != null) {
+                parameters.append("trigger_onepick", "true")
+                parameters.append("file_ids", pickFileId)
+            }
         }.buildString()
-        return AuthRequest(url, redirectUri, state, verifier)
+        return AuthRequest(url, redirectUri, state, verifier, pickFileId)
     }
 
-    /** Completes sign-in with the redirect's query parameters. */
+    /**
+     * Completes sign-in with the redirect's query parameters. For a picker request, the sign-in is
+     * kept even when the file was not picked, and the missing pick is then reported.
+     */
     suspend fun complete(request: AuthRequest, redirectParams: Map<String, String>) {
         redirectParams["error"]?.let { throw RemoteException(if (it == "access_denied") Messages.current.signInCancelled else Messages.current.signInFailed(it)) }
         if (redirectParams["state"] != request.state) throw RemoteException(Messages.current.signInMismatch)
@@ -83,6 +100,10 @@ class PkceOAuthClient(
         ) ?: throw RemoteException(Messages.current.signInRetry)
         refreshToken = tokens.refresh_token ?: refreshToken
         refreshToken?.let { store.write(FILE, json.encodeToString(Saved.serializer(), Saved(it))) }
+        val wanted = request.pickFileId ?: return
+        if (wanted !in redirectParams["picked_file_ids"].orEmpty().split(',')) {
+            throw RemoteException(Messages.current.driveFileNotPicked)
+        }
     }
 
     suspend fun accessToken(forceRefresh: Boolean): String? {
