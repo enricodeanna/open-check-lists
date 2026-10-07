@@ -1,0 +1,27 @@
+# Generate the Xcode project on a Mac with `xcodegen` (brew install xcodegen), then open OpenCheckLists.xcodeproj.
+name: OpenCheckLists
+options:
+  bundleIdPrefix: eu.studiodeanna
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  OpenCheckLists:
+    type: application
+    platform: iOS
+    sources: [iosApp]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.studiodeanna.openchecklists
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Open Check Lists
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        OTHER_LDFLAGS: [$(inherited), -framework, OpenCheckListsUi]
+        FRAMEWORK_SEARCH_PATHS: [$(inherited), "$(SRCROOT)/../ui/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"]
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    preBuildScripts:
+      - name: Build Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :ui:embedAndSignAppleFrameworkForXcode

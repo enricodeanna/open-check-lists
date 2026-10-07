@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1536" viewBox="-256 -256 1536 1536">
+  <!-- Android adaptive icon foreground: the 108 dp layer, whose middle 72 dp is the 1024 tile of app-icon.svg.
+       The background colour is a resource; the margin around the tile is what launchers reveal when they move the icon. -->
+  <circle cx="860" cy="170" r="420" fill="#FFFFFF" opacity="0.04"/>
+  <rect x="210" y="-484" width="280" height="280" rx="64" fill="none" stroke="#E6F3E8" stroke-width="40"/>
+  <rect x="210" y="-56" width="280" height="280" rx="64" fill="none" stroke="#E6F3E8" stroke-width="40"/>
+  <rect x="210" y="372" width="280" height="280" rx="64" fill="none" stroke="#E6F3E8" stroke-width="40"/>
+  <rect x="210" y="800" width="280" height="280" rx="64" fill="none" stroke="#E6F3E8" stroke-width="40"/>
+  <rect x="210" y="1228" width="280" height="280" rx="64" fill="none" stroke="#E6F3E8" stroke-width="40"/>
+  <path d="M252 494 C278 506 302 536 328 592 C366 518 428 416 522 343" fill="none" stroke="#9BE38A" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M600 400 L650 384" fill="none" stroke="#9BE38A" stroke-width="16" stroke-linecap="round" opacity="0.8"/>
+  <path d="M582 444 L620 478" fill="none" stroke="#9BE38A" stroke-width="16" stroke-linecap="round" opacity="0.8"/>
+  <g transform="translate(544 365) rotate(-45)" opacity="0.22">
+    <polygon points="0,0 170,-70 170,70" fill="#06140C"/>
+    <rect x="170" y="-70" width="1200" height="140" fill="#06140C"/>
+  </g>
+  <g transform="translate(522 343) rotate(-45)">
+    <polygon points="0,0 170,-70 170,70" fill="#EED9B0"/>
+    <polygon points="0,0 170,0 170,70" fill="#D9BF8F"/>
+    <polygon points="0,0 58,-24 58,24" fill="#173022"/>
+    <rect x="170" y="-70" width="1200" height="47" fill="#C4EAB3"/>
+    <rect x="170" y="-23.5" width="1200" height="47" fill="#A3D68F"/>
+    <rect x="170" y="23" width="1200" height="47" fill="#82C06F"/>
+  </g>
+</svg>
