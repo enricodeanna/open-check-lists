@@ -1,3 +1,5 @@
+This app was generated with AI: its code was written by Claude, Anthropic's AI model. The author has not reviewed the code; the app has been tested on three real devices.
+
 Open Check Lists keeps to-do lists split into sections, like a grocery list sorted by the shop's aisles, and lets several people edit the same list.
 
 • Sections you can fold away, reorder by dragging, and tick off as a whole

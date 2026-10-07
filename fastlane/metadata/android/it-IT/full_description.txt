@@ -1,3 +1,5 @@
+Questa app è stata generata con l'AI: il codice è stato scritto da Claude, il modello di intelligenza artificiale di Anthropic. L'autore non ha rivisto il codice; l'app è stata provata su tre dispositivi reali.
+
 Open Check Lists tiene liste di cose da fare divise in sezioni, come una lista della spesa ordinata per reparti del negozio, e permette a più persone di modificare la stessa lista.
 
 • Sezioni da comprimere, riordinare trascinandole e spuntare tutte insieme

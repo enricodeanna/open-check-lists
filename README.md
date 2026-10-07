@@ -1,5 +1,9 @@
 # Open Check Lists
 
+> **Generated with AI.** The code of this app was written by Claude, Anthropic's AI model. The
+> author has not reviewed the code; the app has been tested on three real devices. Commits made with
+> Claude name it as co-author.
+
 To-do lists with sections (a grocery list split by the shop's aisles), for Android, iOS, web and
 desktop. A list can be kept in a Nextcloud share so that anyone with the link can edit it.
 
