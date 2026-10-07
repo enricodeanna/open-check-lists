@@ -18,7 +18,8 @@ Kotlin Multiplatform with one Compose UI for every platform.
 
 ```sh
 ./gradlew :shared:jvmTest                       # tests
-./gradlew :androidApp:assembleDebug             # APK in androidApp/build/outputs/apk/debug
+./gradlew :androidApp:assemblePlayDebug         # APK in androidApp/build/outputs/apk/play/debug
+./gradlew :androidApp:assembleFdroidRelease     # the F-Droid build, unsigned
 ./gradlew :desktopApp:run                       # or :desktopApp:createDistributable
 ./gradlew :webApp:wasmJsBrowserDevelopmentRun   # dev server; :webApp:wasmJsBrowserDistribution for a static build
 ```
@@ -26,6 +27,21 @@ Kotlin Multiplatform with one Compose UI for every platform.
 The desktop app keeps its lists in `~/.local/share/open-check-lists`. Pass another directory as the first
 argument (or set `OPENCHECKLISTS_DATA`) to run a second, independent "device". `OPENCHECKLISTS_OPEN=<list id>` opens
 that list at launch.
+
+**Android** comes in two builds, as product flavors of `androidApp`:
+
+| Flavor   | For         | Google Drive                                  |
+|----------|-------------|-----------------------------------------------|
+| `play`   | Google Play | Yes, through Google Play services             |
+| `fdroid` | F-Droid     | No: it holds no Google Play services or other non-free code |
+
+Only the Google sign-in differs (`androidApp/src/play` and `androidApp/src/fdroid`); everything else,
+Nextcloud sharing included, is the same. Both use the same application id, so either replaces the
+other, but only with the same signing key: F-Droid signs its build with its own key, so moving
+between an F-Droid and a Play install means uninstalling first.
+
+The F-Droid store listing (title, descriptions, icon, changelogs) is in `fastlane/metadata/android`.
+Each release gets a `v<versionName>` git tag, which F-Droid watches for new versions.
 
 **iOS** needs a Mac: `brew install xcodegen`, then `cd iosApp && xcodegen`, and open
 `OpenCheckLists.xcodeproj`. The Xcode build calls Gradle to build the Kotlin framework. The iOS targets
@@ -115,7 +131,7 @@ not be used on current servers; Nextcloud 34 answers there with a folder that is
 ## Setting up Google sign-in
 
 Google Drive needs a Google Cloud project with OAuth clients. Until one is configured, builds
-simply hide the Drive button.
+simply hide the Drive button, as the Android F-Droid build always does.
 
 1. At https://console.cloud.google.com create a project and enable the **Google Drive API** and
    the **Google Picker API**.
@@ -198,3 +214,11 @@ Android also on resume. Delete markers older than 90 days are dropped.
   '*RealNextcloud*'` (it creates and deletes `open-check-list.json`). Single-file shares,
   connecting an account and creating links (`FakeNextcloudServer`), and servers older than 29 are
   covered only by simulated servers.
+
+## License
+
+Open Check Lists is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See [LICENSE](LICENSE).
+
+Copyright © 2026 HTF

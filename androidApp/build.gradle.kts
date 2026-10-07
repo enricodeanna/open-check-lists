@@ -24,6 +24,18 @@ android {
         }
     }
 
+    flavorDimensions += "distribution"
+    productFlavors {
+        // For Google Play: with Google Drive, through Google Play services.
+        create("play") {
+            dimension = "distribution"
+        }
+        // For F-Droid: free software only, so without Google Play services and Google Drive.
+        create("fdroid") {
+            dimension = "distribution"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -47,6 +59,6 @@ dependencies {
     implementation(project(":ui"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.play.services.auth)
-    implementation(libs.kotlinx.coroutines.play.services)
+    "playImplementation"(libs.play.services.auth)
+    "playImplementation"(libs.kotlinx.coroutines.play.services)
 }

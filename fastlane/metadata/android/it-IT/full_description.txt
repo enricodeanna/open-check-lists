@@ -1,0 +1,11 @@
+Open Check Lists tiene liste di cose da fare divise in sezioni, come una lista della spesa ordinata per reparti del negozio, e permette a più persone di modificare la stessa lista.
+
+• Sezioni da comprimere, riordinare trascinandole e spuntare tutte insieme
+• Annulla e ripeti
+• Tema chiaro e scuro; italiano e inglese
+• Niente pubblicità, niente tracciamento, nessun account: le liste restano sul tuo dispositivo
+
+Condivisione con il tuo Nextcloud
+Accedi una volta al tuo Nextcloud, poi tocca "Crea un link di Nextcloud" su una lista: avrà un proprio file in una cartella a tua scelta e un link con cui chiunque può modificare quella lista, e nient'altro. Chi riceve il link non ha bisogno di un account. Funzionano anche i link creati a mano in Nextcloud, a una cartella o a un singolo file, con o senza password.
+
+Le modifiche di più persone vengono unite elemento per elemento, così niente di quello che qualcuno aggiunge va perso. Le liste funzionano anche senza connessione e si sincronizzano quando torna.

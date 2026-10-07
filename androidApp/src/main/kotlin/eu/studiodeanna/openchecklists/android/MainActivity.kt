@@ -16,14 +16,16 @@ import eu.studiodeanna.openchecklists.ui.isDark
 class MainActivity : ComponentActivity() {
     private val app get() = application as OpenCheckListsApplication
 
+    private val googleScreens get() = app.google as? GoogleScreens
+
     private val googleConsent = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
-        app.google.onResult(it)
+        googleScreens?.onResult(it)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        app.google.launcher = googleConsent
+        googleScreens?.launcher = googleConsent
         setContent {
             // The bars' icons follow the app's theme, which the settings may set apart from the system's.
             val settings by app.repository.settings.collectAsState()
@@ -45,7 +47,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (app.google.launcher === googleConsent) app.google.launcher = null
+        googleScreens?.let { if (it.launcher === googleConsent) it.launcher = null }
         super.onDestroy()
     }
 

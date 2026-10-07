@@ -1,0 +1,11 @@
+Open Check Lists keeps to-do lists split into sections, like a grocery list sorted by the shop's aisles, and lets several people edit the same list.
+
+• Sections you can fold away, reorder by dragging, and tick off as a whole
+• Undo and redo
+• Light and dark theme; English and Italian
+• No ads, no tracking, no account needed: lists are kept on your device
+
+Share through your Nextcloud
+Log in to your Nextcloud once, then tap "Create a Nextcloud link" on a list: it gets its own file in a folder you choose, and a link that lets anyone edit that list and nothing else. The people you share with need no account. Links you make yourself in Nextcloud work too, to a folder or a single file, with or without a password.
+
+Edits from several people are merged item by item, so nothing anyone adds is lost. Lists keep working offline and sync when the connection is back.

@@ -30,7 +30,7 @@ import kotlinx.coroutines.tasks.await
  * several Google accounts keeps using the one the user chose. Signed out, the next sign-in asks again;
  * otherwise Play services would quietly reuse the account this app had before.
  */
-class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
+class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth, GoogleScreens {
     private val client = Identity.getAuthorizationClient(app)
     private val prefs = app.getSharedPreferences("google", Context.MODE_PRIVATE)
     private var token: String? = null
@@ -39,10 +39,10 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
     override val signedIn: StateFlow<Boolean> = state
 
     /** Set by the activity; Google's consent screen is launched through it. */
-    var launcher: ActivityResultLauncher<IntentSenderRequest>? = null
+    override var launcher: ActivityResultLauncher<IntentSenderRequest>? = null
     private var pending: CompletableDeferred<ActivityResult>? = null
 
-    fun onResult(result: ActivityResult) {
+    override fun onResult(result: ActivityResult) {
         pending?.complete(result)
     }
 

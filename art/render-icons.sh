@@ -18,6 +18,10 @@ mkdir -p "$ios"
 rsvg-convert -w 1024 -h 1024 art/app-icon-square.svg | magick png:- -alpha off "PNG24:$ios/AppIcon.png"
 rsvg-convert -w 180 -h 180 art/app-icon-square.svg | magick png:- -alpha off PNG24:webApp/src/wasmJsMain/resources/apple-touch-icon.png
 
+# The store icon, which F-Droid reads from the app's fastlane metadata.
+mkdir -p fastlane/metadata/android/en-US/images
+rsvg-convert -w 512 -h 512 art/app-icon.svg -o fastlane/metadata/android/en-US/images/icon.png
+
 # Desktop window and package icon, and the web favicon.
 mkdir -p desktopApp/src/main/resources
 rsvg-convert -w 512 -h 512 art/app-icon.svg -o desktopApp/src/main/resources/icon.png
