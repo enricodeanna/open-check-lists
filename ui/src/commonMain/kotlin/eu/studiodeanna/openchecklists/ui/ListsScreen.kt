@@ -43,7 +43,11 @@ import eu.studiodeanna.openchecklists.ChecklistRepository
 import eu.studiodeanna.openchecklists.ListChoiceNeeded
 import eu.studiodeanna.openchecklists.ListEntry
 import eu.studiodeanna.openchecklists.model.liveItems
+import eu.studiodeanna.openchecklists.sync.NextcloudAccountApi
 import kotlinx.coroutines.launch
+
+/** The dialogs the settings open for the Nextcloud account; the settings step aside meanwhile. */
+private enum class AccountDialog { Connect, Folder, Disconnect }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +58,11 @@ fun ListsScreen(repository: ChecklistRepository, onOpen: (String) -> Unit) {
     var joining by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var accountDialog by remember { mutableStateOf<AccountDialog?>(null) }
     var choosing by remember { mutableStateOf<ListChoiceNeeded?>(null) }
     val googleSignedIn by repository.googleSignedIn.collectAsState()
     val settings by repository.settings.collectAsState()
+    val nextcloud by repository.nextcloudAccount.collectAsState()
 
     Scaffold(
         topBar = {
@@ -122,12 +128,44 @@ fun ListsScreen(repository: ChecklistRepository, onOpen: (String) -> Unit) {
         }
     }
 
-    if (showSettings) {
+    if (showSettings && accountDialog == null) {
         SettingsDialog(
             settings = settings,
+            nextcloud = nextcloud,
             onChange = { scope.launch { repository.updateSettings(it) } },
+            onConnectNextcloud = { accountDialog = AccountDialog.Connect },
+            onChangeFolder = { accountDialog = AccountDialog.Folder },
+            onDisconnectNextcloud = { accountDialog = AccountDialog.Disconnect },
             onDismiss = { showSettings = false },
         )
+    }
+    when (accountDialog) {
+        AccountDialog.Connect -> NextcloudSetupDialog(
+            repository,
+            onDismiss = { accountDialog = null },
+            onDone = { accountDialog = null },
+        )
+        AccountDialog.Folder -> NextcloudFolderPicker(
+            repository,
+            initial = nextcloud?.folder ?: NextcloudAccountApi.DEFAULT_FOLDER,
+            note = strings.nextcloudFolderIntro + " " + strings.folderChangeNote,
+            onDismiss = { accountDialog = null },
+            onPick = { folder ->
+                accountDialog = null
+                scope.launch { repository.setNextcloudFolder(folder) }
+            },
+        )
+        AccountDialog.Disconnect -> ConfirmDialog(
+            title = strings.disconnectTitle,
+            message = strings.disconnectMessage,
+            confirm = strings.disconnect,
+            onDismiss = { accountDialog = null },
+            onConfirm = {
+                accountDialog = null
+                scope.launch { repository.signOutOfNextcloud() }
+            },
+        )
+        null -> Unit
     }
     if (creating) {
         TextDialog(
@@ -144,7 +182,7 @@ fun ListsScreen(repository: ChecklistRepository, onOpen: (String) -> Unit) {
     if (joining) {
         LinkDialog(
             title = strings.openShared,
-            intro = strings.openSharedIntro,
+            intro = strings.openSharedIntro(repository.googleAvailable),
             onDismiss = { joining = false },
             signIn = repository::signInToGoogle,
             pickFile = repository::pickGoogleFile,

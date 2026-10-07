@@ -24,6 +24,9 @@ import kotlinx.coroutines.CancellationException
 /** A list stored in a Nextcloud share, as [name] inside it; [title] is read from the file. */
 data class SharedList(val fileName: String, val title: String)
 
+/** Thrown when a share needs a password, or a different one; the UI then asks for it. */
+class SharePasswordRequired(message: String) : RemoteException(message)
+
 /**
  * A Nextcloud public share, reached anonymously over WebDAV. Nextcloud 29 and later serve it at
  * `/public.php/dav/files/<token>` (share password as basic-auth password); older servers only at
@@ -168,7 +171,8 @@ class NextcloudShare(
             response.status == HttpStatusCode.Forbidden -> Messages.current.nextcloudRefusedAccess
             else -> Messages.current.nextcloudAnswered("${response.status.value} ${response.status.description}")
         }
-        throw RemoteException(if (detail != null && detail !in message) Messages.current.withNextcloudDetail(message, detail) else message)
+        val worded = if (detail != null && detail !in message) Messages.current.withNextcloudDetail(message, detail) else message
+        throw if (response.status == HttpStatusCode.Unauthorized) SharePasswordRequired(worded) else RemoteException(worded)
     }
 
     internal inline fun <T> guarded(block: () -> T): T = try {

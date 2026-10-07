@@ -19,6 +19,11 @@ import eu.studiodeanna.openchecklists.google.GoogleAuth
 import eu.studiodeanna.openchecklists.google.GoogleFileAccessRequired
 import eu.studiodeanna.openchecklists.google.GoogleSignInRequired
 import eu.studiodeanna.openchecklists.sync.GoogleDriveApi
+import eu.studiodeanna.openchecklists.sync.NextcloudAccount
+import eu.studiodeanna.openchecklists.sync.NextcloudAccountApi
+import eu.studiodeanna.openchecklists.sync.NextcloudLogin
+import eu.studiodeanna.openchecklists.sync.NextcloudSetupNeeded
+import eu.studiodeanna.openchecklists.sync.NextcloudSignInRequired
 import eu.studiodeanna.openchecklists.sync.ParsedLink
 import eu.studiodeanna.openchecklists.sync.RemoteException
 import eu.studiodeanna.openchecklists.sync.ShareLinks
@@ -85,7 +90,13 @@ class ChecklistRepository(
     private val syncDelayMillis: Long = 800,
 ) {
     private val drive = google?.let { GoogleDriveApi(it, http) }
+    private val nextcloud = NextcloudAccountApi(http)
     private val remoteFor: (ShareLink) -> RemoteFile = { remoteFileFor(it, http, drive) }
+
+    private val _nextcloudAccount = MutableStateFlow<NextcloudAccount?>(null)
+
+    /** The Nextcloud account this device logged in to, to create share links; null if none. */
+    val nextcloudAccount: StateFlow<NextcloudAccount?> = _nextcloudAccount.asStateFlow()
 
     /** Whether this build can use Google Drive at all (it has an OAuth client configured). */
     val googleAvailable: Boolean get() = google != null
@@ -108,6 +119,9 @@ class ChecklistRepository(
         if (device.isNotEmpty()) return
         files.read(SETTINGS)?.let { text ->
             runCatching { json.decodeFromString(Settings.serializer(), text) }.getOrNull()?.let { _settings.value = it }
+        }
+        files.read(NEXTCLOUD)?.let { text ->
+            runCatching { json.decodeFromString(NextcloudAccount.serializer(), text) }.getOrNull()?.let { _nextcloudAccount.value = it }
         }
         val library = files.read(LIBRARY)?.let { json.decodeFromString(Library.serializer(), it) }
             ?: Library(device = newDeviceId()).also { files.write(LIBRARY, json.encodeToString(Library.serializer(), it)) }
@@ -314,6 +328,65 @@ class ChecklistRepository(
         google?.signOut()
     }
 
+    /**
+     * Keeps [id] in a new file in the Nextcloud folder, with a public link anyone can edit it through.
+     * Throws [NextcloudSetupNeeded] while there is no account or folder yet, and
+     * [NextcloudSignInRequired] when the server no longer accepts the app's login.
+     */
+    suspend fun shareViaNextcloud(id: String) {
+        val account = _nextcloudAccount.value?.takeIf { it.folder != null } ?: throw NextcloudSetupNeeded()
+        val doc = entry(id)?.doc ?: return
+        attachLink(id, nextcloud.share(account, doc.title, ListCodec.encode(doc.normalized())))
+    }
+
+    /** Starts Nextcloud's login at the server the user typed; the caller opens [NextcloudLogin.loginUrl]. */
+    suspend fun startNextcloudSignIn(address: String): NextcloudLogin = nextcloud.startLogin(address)
+
+    /**
+     * Waits until the user has logged in, then keeps the account. Logging in to the same account again
+     * keeps its folder; otherwise the folder is left for the user to confirm.
+     */
+    suspend fun finishNextcloudSignIn(login: NextcloudLogin): NextcloudAccount {
+        val signedIn = nextcloud.awaitLogin(login)
+        val folder = _nextcloudAccount.value?.takeIf { it.server == signedIn.server && it.userId == signedIn.userId }?.folder
+        return signedIn.copy(folder = folder).also { saveNextcloudAccount(it) }
+    }
+
+    /** The folders in [path] ("" for the top) of the Nextcloud account; null if [path] is not there. */
+    suspend fun nextcloudFolders(path: String): List<String>? =
+        nextcloud.folders(_nextcloudAccount.value ?: throw NextcloudSetupNeeded(), path)
+
+    /** Creates the folder [path] in the Nextcloud account. */
+    suspend fun createNextcloudFolder(path: String) {
+        nextcloud.createFolder(_nextcloudAccount.value ?: throw NextcloudSetupNeeded(), path)
+    }
+
+    /** Sets the folder that lists shared from now on are kept in; lists already shared stay where they are. */
+    suspend fun setNextcloudFolder(folder: String) {
+        val account = _nextcloudAccount.value ?: return
+        saveNextcloudAccount(account.copy(folder = NextcloudAccountApi.folderPath(folder) ?: NextcloudAccountApi.DEFAULT_FOLDER))
+    }
+
+    /**
+     * Forgets the account and removes the app's login from it. Lists already shared keep syncing,
+     * through their public links.
+     */
+    suspend fun signOutOfNextcloud() {
+        val account = _nextcloudAccount.value ?: return
+        _nextcloudAccount.value = null
+        saveLock.withLock { files.delete(NEXTCLOUD) }
+        // Offline, the login stays in the account until the user removes it in Nextcloud's settings.
+        try {
+            nextcloud.revoke(account)
+        } catch (_: RemoteException) {
+        }
+    }
+
+    private suspend fun saveNextcloudAccount(account: NextcloudAccount) {
+        _nextcloudAccount.value = account
+        saveLock.withLock { files.write(NEXTCLOUD, json.encodeToString(NextcloudAccount.serializer(), account)) }
+    }
+
     fun syncNow(id: String) = scheduleSync(id, 0)
 
     fun syncAll() = _lists.value.filter { it.link != null }.forEach { syncNow(it.id) }
@@ -383,6 +456,8 @@ class ChecklistRepository(
     private companion object {
         const val LIBRARY = "library.json"
         const val SETTINGS = "settings.json"
+        /** Kept apart from the settings, as it holds the app's Nextcloud password. */
+        const val NEXTCLOUD = "nextcloud-account.json"
         fun fileOf(id: String) = "list-$id.json"
         val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     }

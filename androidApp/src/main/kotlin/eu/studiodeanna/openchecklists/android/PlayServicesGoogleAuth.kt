@@ -1,11 +1,13 @@
 package eu.studiodeanna.openchecklists.android
 
 import eu.studiodeanna.openchecklists.Messages
+import android.accounts.Account
 import android.app.Application
 import android.content.Context
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
+import androidx.core.content.edit
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.ClearTokenRequest
@@ -23,12 +25,13 @@ import kotlinx.coroutines.tasks.await
 /**
  * Android sign-in through Google Play services. The OAuth client is matched by package name and
  * signing certificate, so no client id appears here. Play services caches and renews tokens itself.
+ *
+ * The account picked at sign-in is remembered and asked for by name from then on, so a phone with
+ * several Google accounts keeps using the one the user chose. Signed out, the next sign-in asks again;
+ * otherwise Play services would quietly reuse the account this app had before.
  */
 class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
     private val client = Identity.getAuthorizationClient(app)
-    private val request = AuthorizationRequest.builder()
-        .setRequestedScopes(listOf(Scope(GoogleOAuthConfig.DRIVE_SCOPE)))
-        .build()
     private val prefs = app.getSharedPreferences("google", Context.MODE_PRIVATE)
     private var token: String? = null
 
@@ -48,7 +51,7 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
         if (!state.value) return null
         if (forceRefresh) token?.let { clearToken(it) }
         if (!forceRefresh) token?.let { return it }
-        val result = authorize()
+        val result = authorize(request())
         if (result.hasResolution()) {
             setSignedIn(false)
             return null
@@ -57,18 +60,16 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
     }
 
     override suspend fun signIn() {
-        resolve(authorize())
+        resolve(authorize(request(AuthorizationRequest.Prompt.NOT_SET)))
     }
 
     /** Google's consent screen followed by its file picker, which shows only [fileId]. */
     override suspend fun pickFile(fileId: String) {
-        val picker = AuthorizationRequest.builder()
-            .setRequestedScopes(listOf(Scope(GoogleOAuthConfig.DRIVE_SCOPE)))
-            .setOptOutIncludingGrantedScopes(true)
-            .setPrompt(AuthorizationRequest.Prompt.CONSENT)
-            .addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_OAUTH_TRIGGER, "true")
-            .addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_FILE_IDS, fileId)
-            .build()
+        val picker = request(AuthorizationRequest.Prompt.CONSENT) {
+            setOptOutIncludingGrantedScopes(true)
+            addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_OAUTH_TRIGGER, "true")
+            addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_FILE_IDS, fileId)
+        }
         val result = resolve(authorize(picker))
         val picked = result.tokenResponseParams?.getString("picked_file_ids").orEmpty().split(',')
         if (fileId !in picked) throw RemoteException(Messages.current.driveFileNotPicked)
@@ -89,17 +90,33 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
             }
         }
         token = result.accessToken ?: throw RemoteException(Messages.current.signInRetry)
+        result.toGoogleSignInAccount()?.account?.name?.let { prefs.edit { putString(ACCOUNT, it) } }
         setSignedIn(true)
         return result
+    }
+
+    /**
+     * A request for the Drive scope, for the remembered account. With a [prompt] it may show Google's
+     * screens; with no account remembered, those start by asking which account to use.
+     */
+    private fun request(prompt: Int? = null, configure: AuthorizationRequest.Builder.() -> Unit = {}): AuthorizationRequest {
+        val builder = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(GoogleOAuthConfig.DRIVE_SCOPE)))
+        val account = prefs.getString(ACCOUNT, null)
+        if (account != null) builder.setAccount(Account(account, GOOGLE_ACCOUNT_TYPE))
+        if (prompt != null) {
+            builder.setPrompt(if (account == null) prompt or AuthorizationRequest.Prompt.SELECT_ACCOUNT else prompt)
+        }
+        return builder.apply(configure).build()
     }
 
     override suspend fun signOut() {
         token?.let { clearToken(it) }
         token = null
+        prefs.edit { remove(ACCOUNT) }
         setSignedIn(false)
     }
 
-    private suspend fun authorize(with: AuthorizationRequest = request): AuthorizationResult = try {
+    private suspend fun authorize(with: AuthorizationRequest): AuthorizationResult = try {
         client.authorize(with).await()
     } catch (e: CancellationException) {
         throw e
@@ -114,10 +131,12 @@ class PlayServicesGoogleAuth(private val app: Application) : GoogleAuth {
 
     private fun setSignedIn(value: Boolean) {
         state.value = value
-        prefs.edit().putBoolean(SIGNED_IN, value).apply()
+        prefs.edit { putBoolean(SIGNED_IN, value) }
     }
 
     private companion object {
         const val SIGNED_IN = "signedIn"
+        const val ACCOUNT = "account"
+        const val GOOGLE_ACCOUNT_TYPE = "com.google"
     }
 }

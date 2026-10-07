@@ -28,6 +28,12 @@ interface Messages {
     val nextcloudRefusedAccess: String
     fun nextcloudAnswered(status: String): String
     fun withNextcloudDetail(message: String, detail: String): String
+    fun notANextcloud(server: String): String
+    val nextcloudLoginTimedOut: String
+    val nextcloudSignInAgain: String
+    val nextcloudNotConnected: String
+    fun nextcloudRefusedShare(detail: String?): String
+    val nextcloudUnexpected: String
 
     val googleAppFile: String
     val driveUnexpected: String
@@ -85,6 +91,13 @@ object EnglishMessages : Messages {
     override val nextcloudRefusedAccess = "Nextcloud refused access to this share."
     override fun nextcloudAnswered(status: String) = "Nextcloud answered $status."
     override fun withNextcloudDetail(message: String, detail: String) = "$message (Nextcloud: $detail)"
+    override fun notANextcloud(server: String) = "No Nextcloud found at $server. Check the address."
+    override val nextcloudLoginTimedOut = "The Nextcloud login was not finished in time. Try again."
+    override val nextcloudSignInAgain = "Nextcloud no longer accepts this app's login. Log in again."
+    override val nextcloudNotConnected = "Connect to Nextcloud first."
+    override fun nextcloudRefusedShare(detail: String?) =
+        "Nextcloud refused to create the share link" + (detail?.let { ": $it" } ?: ".")
+    override val nextcloudUnexpected = "Nextcloud gave an unexpected answer."
 
     override val googleAppFile = "This is a Google Docs, Sheets or other Google file. Share a plain file instead."
     override val driveUnexpected = "Google Drive gave an unexpected answer."
@@ -148,6 +161,13 @@ object ItalianMessages : Messages {
     override val nextcloudRefusedAccess = "Nextcloud ha negato l'accesso a questa condivisione."
     override fun nextcloudAnswered(status: String) = "Nextcloud ha risposto $status."
     override fun withNextcloudDetail(message: String, detail: String) = "$message (Nextcloud: $detail)"
+    override fun notANextcloud(server: String) = "Nessun Nextcloud trovato su $server. Controlla l'indirizzo."
+    override val nextcloudLoginTimedOut = "L'accesso a Nextcloud non è stato completato in tempo. Riprova."
+    override val nextcloudSignInAgain = "Nextcloud non accetta più l'accesso di questa app. Accedi di nuovo."
+    override val nextcloudNotConnected = "Collega prima Nextcloud."
+    override fun nextcloudRefusedShare(detail: String?) =
+        "Nextcloud ha rifiutato di creare il link di condivisione" + (detail?.let { ": $it" } ?: ".")
+    override val nextcloudUnexpected = "Nextcloud ha dato una risposta inattesa."
 
     override val googleAppFile = "Questo è un file Google Documenti, Fogli o simile. Condividi invece un file normale."
     override val driveUnexpected = "Google Drive ha dato una risposta inattesa."

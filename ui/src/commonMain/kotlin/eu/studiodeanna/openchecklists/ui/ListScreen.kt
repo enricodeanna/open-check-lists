@@ -38,8 +38,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -66,6 +68,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -265,7 +268,7 @@ fun ListScreen(repository: ChecklistRepository, id: String, onBack: () -> Unit) 
                         Icon(
                             Icons.Default.Share,
                             contentDescription = strings.sharing,
-                            tint = if (linked) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                            tint = if (linked) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                         )
                     }
                     Box {
@@ -438,8 +441,10 @@ fun ListScreen(repository: ChecklistRepository, id: String, onBack: () -> Unit) 
         } else {
             LinkDialog(
                 title = strings.shareThisList,
-                intro = strings.shareHelp,
+                intro = strings.shareHelp(repository.googleAvailable),
                 onDismiss = { dialog = null },
+                // Once linked, this same dialog shows the link to send.
+                onDone = {},
                 signIn = repository::signInToGoogle,
                 pickFile = repository::pickGoogleFile,
                 connect = { link -> repository.attachLink(id, link) },
@@ -448,6 +453,8 @@ fun ListScreen(repository: ChecklistRepository, id: String, onBack: () -> Unit) 
                 } else {
                     null
                 },
+                createNextcloudLink = { repository.shareViaNextcloud(id) },
+                nextcloudSetup = { dismiss, done -> NextcloudSetupDialog(repository, dismiss, done) },
             )
         }
         Dialog.DeleteList -> ConfirmDialog(
@@ -679,6 +686,12 @@ private fun SyncErrorBanner(message: String, action: String, onAction: () -> Uni
 @Composable
 private fun SharedDialog(entry: ListEntry, onDismiss: () -> Unit, onSync: () -> Unit, onStop: () -> Unit) {
     val link = entry.link ?: return
+    val shareable = ShareLinks.shareable(link)
+    val clipboard = LocalClipboard.current
+    val shareSheet = rememberShareSheet()
+    val scope = rememberCoroutineScope()
+    var copied by remember { mutableStateOf(false) }
+    val sendText = strings.sendText(shareable, link.password)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.sharedList) },
@@ -692,7 +705,18 @@ private fun SharedDialog(entry: ListEntry, onDismiss: () -> Unit, onSync: () -> 
                     },
                 )
                 SelectionContainer {
-                    Text(ShareLinks.shareable(link), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(shareable, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        scope.launch { clipboard.setClipEntry(plainTextClip(shareable)) }
+                        copied = true
+                    }) {
+                        Text(if (copied) strings.copied else strings.copyLink)
+                    }
+                    shareSheet?.let { share ->
+                        Button(onClick = { share(sendText) }) { Text(strings.send) }
+                    }
                 }
                 link.fileName?.let {
                     Text(
@@ -701,9 +725,10 @@ private fun SharedDialog(entry: ListEntry, onDismiss: () -> Unit, onSync: () -> 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (link.password != null) {
-                    Text(strings.needsSharePassword, style = MaterialTheme.typography.bodySmall)
+                link.password?.let { password ->
+                    SelectionContainer { Text(strings.needsSharePassword(password), style = MaterialTheme.typography.bodySmall) }
                 }
+                link.expires?.let { Text(strings.linkExpires(it), style = MaterialTheme.typography.bodySmall) }
                 Text(describe(entry.sync, strings), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = onStop) { Text(strings.stopSyncing, color = MaterialTheme.colorScheme.error) }
             }

@@ -48,7 +48,7 @@ object GoogleOAuthConfig {
     const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 
     /** Set to true once the Android OAuth client (package + SHA-1) is registered; until then Drive stays hidden. */
-    const val ANDROID_CLIENT_REGISTERED = false
+    const val ANDROID_CLIENT_REGISTERED = true
 
     const val DESKTOP_CLIENT_ID = ""
     const val DESKTOP_CLIENT_SECRET = ""

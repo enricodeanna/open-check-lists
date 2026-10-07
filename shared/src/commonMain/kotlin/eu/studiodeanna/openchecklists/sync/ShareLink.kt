@@ -6,10 +6,16 @@ import kotlinx.serialization.Serializable
 
 /**
  * A shared-file link as the user pasted it, plus the share password if it has one. [fileName] is the
- * list's own file when the link is to a shared folder holding several lists.
+ * list's own file when the link is to a shared folder holding several lists. [expires] is the day
+ * (yyyy-mm-dd) the server ends a link the app created, when the server sets one.
  */
 @Serializable
-data class ShareLink(val url: String, val password: String? = null, val fileName: String? = null)
+data class ShareLink(
+    val url: String,
+    val password: String? = null,
+    val fileName: String? = null,
+    val expires: String? = null,
+)
 
 sealed interface ParsedLink {
     /** A Nextcloud public share, `https://cloud.example.com/s/<token>`, optionally naming one list file in it. */

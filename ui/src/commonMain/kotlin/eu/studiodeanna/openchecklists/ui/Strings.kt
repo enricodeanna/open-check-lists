@@ -30,7 +30,8 @@ interface Strings {
     val newList: String
     val noLists: String
     val openShared: String
-    val openSharedIntro: String
+    /** [drive]: whether this build can use Google Drive links. */
+    fun openSharedIntro(drive: Boolean): String
     val signOutOfGoogle: String
     val emptyList: String
     fun doneOf(done: Int, total: Int): String
@@ -53,7 +54,7 @@ interface Strings {
     val deleteSharedListMessage: String
     val cantBeUndone: String
     val shareThisList: String
-    val shareHelp: String
+    fun shareHelp(drive: Boolean): String
     val sectionOptions: String
     val moveUp: String
     val moveDown: String
@@ -67,7 +68,13 @@ interface Strings {
     val anyoneWithLinkGoogle: String
     val anyoneWithLink: String
     fun keptInFolder(fileName: String): String
-    val needsSharePassword: String
+    fun needsSharePassword(password: String): String
+    fun linkExpires(date: String): String
+    val copyLink: String
+    val copied: String
+    val send: String
+    /** What "Send" passes to another app: the link, and the password if the share has one. */
+    fun sendText(link: String, password: String?): String
     val stopSyncing: String
     val undo: String
     val redo: String
@@ -77,7 +84,8 @@ interface Strings {
 
     // Dialogs
     val createDriveLink: String
-    val orPasteLink: String
+    val createNextcloudLink: String
+    fun orPasteLink(drive: Boolean): String
     val shareLink: String
     val sharePassword: String
     val connect: String
@@ -95,6 +103,31 @@ interface Strings {
     fun syncedMinutesAgo(minutes: Long): String
     fun syncedHoursAgo(hours: Long): String
     fun syncedDaysAgo(days: Long): String
+
+    // Nextcloud account
+    val connectNextcloud: String
+    val connectNextcloudIntro: String
+    val nextcloudAddress: String
+    val logIn: String
+    val logInInBrowser: String
+    val openAgain: String
+    val nextcloudFolder: String
+    val nextcloudFolderIntro: String
+    val folderChangeNote: String
+    val otherFolder: String
+    val chooseFolder: String
+    val chooseFolderHint: String
+    val useThisFolder: String
+    val newFolder: String
+    val parentFolder: String
+    val noSubfolders: String
+    val notConnected: String
+    fun connectedAs(user: String, server: String): String
+    fun sharedListsGoTo(folder: String): String
+    val changeFolder: String
+    val disconnect: String
+    val disconnectTitle: String
+    val disconnectMessage: String
 
     // Settings
     val settings: String
@@ -123,8 +156,13 @@ object EnglishStrings : Strings {
     override val newList = "New list"
     override val noLists = "No lists yet.\nStart a new one, or open a list someone shared with you."
     override val openShared = "Open a shared list"
-    override val openSharedIntro = "Paste the Nextcloud or Google Drive link you were sent. " +
-        "For a Google Drive link, Google then asks you to sign in and to choose the list's file."
+    override fun openSharedIntro(drive: Boolean) =
+        if (drive) {
+            "Paste the Nextcloud or Google Drive link you were sent. " +
+                "For a Google Drive link, Google then asks you to sign in and to choose the list's file."
+        } else {
+            "Paste the Nextcloud link you were sent."
+        }
     override val signOutOfGoogle = "Sign out of Google"
     override val emptyList = "Empty"
     override fun doneOf(done: Int, total: Int) = "$done of $total done"
@@ -147,11 +185,11 @@ object EnglishStrings : Strings {
         "It is removed from this device only. The shared file and other people's copies stay."
     override val cantBeUndone = "This can't be undone."
     override val shareThisList = "Share this list"
-    override val shareHelp =
+    override fun shareHelp(drive: Boolean) =
         "Keep this list in a shared file so anyone with the link can edit it.\n\n" +
-            "Google Drive: create a link below; others sign in with their Google account to edit.\n\n" +
-            "Nextcloud: create a folder, share it by link allowing upload and editing, and paste the link. " +
-            "No account is needed to edit. One folder can hold many lists; each gets its own file, named after the list."
+            "Nextcloud: create a link below. You log in to your Nextcloud once; the people you share with need no account.\n\n" +
+            (if (drive) "Google Drive: create a link below; others sign in with their Google account to edit.\n\n" else "") +
+            "You can also paste a Nextcloud link you made yourself, to a folder or file shared with editing allowed."
     override val sectionOptions = "Section options"
     override val moveUp = "Move up"
     override val moveDown = "Move down"
@@ -166,7 +204,13 @@ object EnglishStrings : Strings {
         "Anyone with this link can open and edit the list in Open Check Lists, signed in with a Google account:"
     override val anyoneWithLink = "Anyone with this link can open and edit the list in Open Check Lists:"
     override fun keptInFolder(fileName: String) = "Kept in the shared folder as “$fileName”."
-    override val needsSharePassword = "They also need the share password."
+    override fun needsSharePassword(password: String) = "They also need the share password: $password"
+    override fun linkExpires(date: String) = "Your Nextcloud ends this link on $date."
+    override val copyLink = "Copy link"
+    override val copied = "Copied"
+    override val send = "Send…"
+    override fun sendText(link: String, password: String?) =
+        "Open this list in Open Check Lists: $link" + (password?.let { "\nPassword: $it" } ?: "")
     override val stopSyncing = "Stop syncing on this device"
     override val undo = "Undo"
     override val redo = "Redo"
@@ -190,9 +234,10 @@ object EnglishStrings : Strings {
     }
 
     override val createDriveLink = "Create a Google Drive link"
-    override val orPasteLink = "Or paste a Nextcloud or Google Drive link:"
+    override val createNextcloudLink = "Create a Nextcloud link"
+    override fun orPasteLink(drive: Boolean) = if (drive) "Or paste a Nextcloud or Google Drive link:" else "Or paste a Nextcloud link:"
     override val shareLink = "Share link"
-    override val sharePassword = "Nextcloud share password (if any)"
+    override val sharePassword = "Nextcloud share password"
     override val connect = "Connect"
     override val whichList = "Which list?"
     override val severalLists = "This shared folder holds several lists."
@@ -207,6 +252,34 @@ object EnglishStrings : Strings {
     override fun syncedMinutesAgo(minutes: Long) = "Synced $minutes min ago"
     override fun syncedHoursAgo(hours: Long) = "Synced $hours h ago"
     override fun syncedDaysAgo(days: Long) = "Synced $days days ago"
+
+    override val connectNextcloud = "Connect to Nextcloud"
+    override val connectNextcloudIntro =
+        "Log in to your Nextcloud once, so the app can create a share link for each list. " +
+            "The people you share with need no account."
+    override val nextcloudAddress = "Nextcloud address"
+    override val logIn = "Log in"
+    override val logInInBrowser = "Log in to Nextcloud in the browser window that opened, then come back here."
+    override val openAgain = "Open again"
+    override val nextcloudFolder = "Folder for shared lists"
+    override val nextcloudFolderIntro =
+        "Lists you share are kept in this folder in your Nextcloud, each in its own file with its own link."
+    override val folderChangeNote = "Lists already shared stay where they are."
+    override val otherFolder = "Choose another folder…"
+    override val chooseFolder = "Choose a folder"
+    override val chooseFolderHint = "Open a folder, or create a new one."
+    override val useThisFolder = "Use this folder"
+    override val newFolder = "New folder"
+    override val parentFolder = "Up one level"
+    override val noSubfolders = "No folders in here."
+    override val notConnected = "Not connected."
+    override fun connectedAs(user: String, server: String) = "Connected as $user on $server."
+    override fun sharedListsGoTo(folder: String) = "Shared lists go in “$folder”."
+    override val changeFolder = "Change folder"
+    override val disconnect = "Disconnect"
+    override val disconnectTitle = "Disconnect from Nextcloud?"
+    override val disconnectMessage =
+        "Lists already shared keep syncing through their links. The app's login is removed from your Nextcloud."
 
     override val settings = "Settings"
     override val theme = "Theme"
@@ -234,8 +307,13 @@ object ItalianStrings : Strings {
     override val newList = "Nuova lista"
     override val noLists = "Ancora nessuna lista.\nCreane una nuova, o apri una lista che qualcuno ha condiviso con te."
     override val openShared = "Apri una lista condivisa"
-    override val openSharedIntro = "Incolla il link di Nextcloud o Google Drive che hai ricevuto. " +
-        "Per un link di Google Drive, Google ti chiede poi di accedere e di scegliere il file della lista."
+    override fun openSharedIntro(drive: Boolean) =
+        if (drive) {
+            "Incolla il link di Nextcloud o Google Drive che hai ricevuto. " +
+                "Per un link di Google Drive, Google ti chiede poi di accedere e di scegliere il file della lista."
+        } else {
+            "Incolla il link di Nextcloud che hai ricevuto."
+        }
     override val signOutOfGoogle = "Esci da Google"
     override val emptyList = "Vuota"
     override fun doneOf(done: Int, total: Int) = "$done di $total fatti"
@@ -259,12 +337,12 @@ object ItalianStrings : Strings {
         "Viene rimossa solo da questo dispositivo. Il file condiviso e le copie degli altri restano."
     override val cantBeUndone = "L'operazione non può essere annullata."
     override val shareThisList = "Condividi questa lista"
-    override val shareHelp =
+    override fun shareHelp(drive: Boolean) =
         "Tieni questa lista in un file condiviso, così chiunque abbia il link può modificarla.\n\n" +
-            "Google Drive: crea un link qui sotto; gli altri accedono con il proprio account Google per modificarla.\n\n" +
-            "Nextcloud: crea una cartella, condividila tramite link consentendo caricamento e modifica, e incolla il link. " +
-            "Non serve un account per modificare. Una cartella può contenere molte liste; ognuna ha un proprio file, " +
-            "con il nome della lista."
+            "Nextcloud: crea un link qui sotto. Accedi una volta al tuo Nextcloud; chi riceve il link non ha bisogno " +
+            "di un account.\n\n" +
+            (if (drive) "Google Drive: crea un link qui sotto; gli altri accedono con il proprio account Google per modificarla.\n\n" else "") +
+            "Puoi anche incollare un link di Nextcloud creato da te, a una cartella o a un file condiviso con la modifica consentita."
     override val sectionOptions = "Opzioni della sezione"
     override val moveUp = "Sposta su"
     override val moveDown = "Sposta giù"
@@ -279,7 +357,13 @@ object ItalianStrings : Strings {
         "Chiunque abbia questo link può aprire e modificare la lista in Open Check Lists, accedendo con un account Google:"
     override val anyoneWithLink = "Chiunque abbia questo link può aprire e modificare la lista in Open Check Lists:"
     override fun keptInFolder(fileName: String) = "Salvata nella cartella condivisa come “$fileName”."
-    override val needsSharePassword = "Serve anche la password della condivisione."
+    override fun needsSharePassword(password: String) = "Serve anche la password della condivisione: $password"
+    override fun linkExpires(date: String) = "Il tuo Nextcloud disattiva questo link il $date."
+    override val copyLink = "Copia link"
+    override val copied = "Copiato"
+    override val send = "Invia…"
+    override fun sendText(link: String, password: String?) =
+        "Apri questa lista in Open Check Lists: $link" + (password?.let { "\nPassword: $it" } ?: "")
     override val stopSyncing = "Interrompi la sincronizzazione su questo dispositivo"
     override val undo = "Annulla"
     override val redo = "Ripeti"
@@ -304,9 +388,11 @@ object ItalianStrings : Strings {
     }
 
     override val createDriveLink = "Crea un link di Google Drive"
-    override val orPasteLink = "Oppure incolla un link di Nextcloud o Google Drive:"
+    override val createNextcloudLink = "Crea un link di Nextcloud"
+    override fun orPasteLink(drive: Boolean) =
+        if (drive) "Oppure incolla un link di Nextcloud o Google Drive:" else "Oppure incolla un link di Nextcloud:"
     override val shareLink = "Link di condivisione"
-    override val sharePassword = "Password della condivisione Nextcloud (se presente)"
+    override val sharePassword = "Password della condivisione Nextcloud"
     override val connect = "Collega"
     override val whichList = "Quale lista?"
     override val severalLists = "Questa cartella condivisa contiene più liste."
@@ -321,6 +407,36 @@ object ItalianStrings : Strings {
     override fun syncedMinutesAgo(minutes: Long) = "Sincronizzata $minutes min fa"
     override fun syncedHoursAgo(hours: Long) = "Sincronizzata $hours h fa"
     override fun syncedDaysAgo(days: Long) = "Sincronizzata $days giorni fa"
+
+    override val connectNextcloud = "Collega Nextcloud"
+    override val connectNextcloudIntro =
+        "Accedi una volta al tuo Nextcloud, così l'app può creare un link di condivisione per ogni lista. " +
+            "Chi riceve il link non ha bisogno di un account."
+    override val nextcloudAddress = "Indirizzo di Nextcloud"
+    override val logIn = "Accedi"
+    override val logInInBrowser = "Accedi a Nextcloud nella finestra del browser che si è aperta, poi torna qui."
+    override val openAgain = "Apri di nuovo"
+    override val nextcloudFolder = "Cartella per le liste condivise"
+    override val nextcloudFolderIntro =
+        "Le liste che condividi vengono salvate in questa cartella del tuo Nextcloud, ognuna in un proprio file " +
+            "con un proprio link."
+    override val folderChangeNote = "Le liste già condivise restano dove sono."
+    override val otherFolder = "Scegli un'altra cartella…"
+    override val chooseFolder = "Scegli una cartella"
+    override val chooseFolderHint = "Apri una cartella o creane una nuova."
+    override val useThisFolder = "Usa questa cartella"
+    override val newFolder = "Nuova cartella"
+    override val parentFolder = "Cartella superiore"
+    override val noSubfolders = "Nessuna cartella qui dentro."
+    override val notConnected = "Non collegato."
+    override fun connectedAs(user: String, server: String) = "Collegato come $user su $server."
+    override fun sharedListsGoTo(folder: String) = "Le liste condivise vanno in “$folder”."
+    override val changeFolder = "Cambia cartella"
+    override val disconnect = "Scollega"
+    override val disconnectTitle = "Scollegare Nextcloud?"
+    override val disconnectMessage =
+        "Le liste già condivise continuano a sincronizzarsi tramite i loro link. L'accesso dell'app viene rimosso " +
+            "dal tuo Nextcloud."
 
     override val settings = "Impostazioni"
     override val theme = "Tema"

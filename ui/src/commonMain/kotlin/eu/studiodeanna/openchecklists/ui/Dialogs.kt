@@ -47,8 +47,13 @@ import eu.studiodeanna.openchecklists.store.Settings
 import eu.studiodeanna.openchecklists.store.ThemeChoice
 import eu.studiodeanna.openchecklists.google.GoogleFileAccessRequired
 import eu.studiodeanna.openchecklists.google.GoogleSignInRequired
+import eu.studiodeanna.openchecklists.sync.NextcloudAccount
+import eu.studiodeanna.openchecklists.sync.NextcloudSetupNeeded
+import eu.studiodeanna.openchecklists.sync.NextcloudSignInRequired
 import eu.studiodeanna.openchecklists.sync.RemoteException
 import eu.studiodeanna.openchecklists.sync.ShareLink
+import eu.studiodeanna.openchecklists.sync.SharePasswordRequired
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 
 @Composable
@@ -58,6 +63,7 @@ fun TextDialog(
     confirm: String,
     initial: String = "",
     onDismiss: () -> Unit,
+    message: String? = null,
     onConfirm: (String) -> Unit,
 ) {
     var value by remember { mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length))) }
@@ -67,18 +73,21 @@ fun TextDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = { value = it },
-                label = { Text(label) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(onDone = { if (ok) onConfirm(value.text) }),
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text(label) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (ok) onConfirm(value.text) }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+            }
             LaunchedEffect(Unit) { focus.requestFocus() }
         },
         confirmButton = { TextButton(onClick = { onConfirm(value.text) }, enabled = ok) { Text(confirm) } },
@@ -99,29 +108,50 @@ fun ConfirmDialog(title: String, message: String, confirm: String, onDismiss: ()
     )
 }
 
+/** Ends a step of [LinkDialog] the user cancelled, without an error to show. */
+private class StepCancelled : Exception()
+
 /**
- * Asks for a share link and password, then runs [connect]; stays open showing the error if that
- * fails, and closes on success. [createDriveLink], when given, offers making a new Google Drive
- * file instead. Either action signs in to Google, or shows Google's file picker, if it has to.
+ * Asks for a share link, then runs [connect]; stays open showing the error if that fails, and calls
+ * [onDone] on success. The password field appears once a share turns out to need one.
+ * [createDriveLink] and [createNextcloudLink], when given, offer making a new shared file instead.
+ * Each action signs in to Google, shows Google's file picker, or shows [nextcloudSetup] first if it
+ * has to.
  */
 @Composable
 fun LinkDialog(
     title: String,
     intro: String,
     onDismiss: () -> Unit,
+    onDone: () -> Unit = onDismiss,
     signIn: suspend () -> Unit,
     pickFile: suspend (fileId: String) -> Unit,
     connect: suspend (ShareLink) -> Unit,
     createDriveLink: (suspend () -> Unit)? = null,
+    createNextcloudLink: (suspend () -> Unit)? = null,
+    nextcloudSetup: (@Composable (onDismiss: () -> Unit, onDone: () -> Unit) -> Unit)? = null,
 ) {
     var url by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var askPassword by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var settingUp by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+    val passwordFocus = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
 
-    // Each Google step is needed at most once: a sign-in, then the picker for someone else's file.
-    suspend fun withGoogle(action: suspend () -> Unit) {
+    suspend fun setUpNextcloud() {
+        val finished = CompletableDeferred<Boolean>().also { settingUp = it }
+        try {
+            if (!finished.await()) throw StepCancelled()
+        } finally {
+            settingUp = null
+        }
+    }
+
+    // Each account step is needed at most once: a Google sign-in, then the picker for someone else's
+    // file; or the Nextcloud setup.
+    suspend fun withAccounts(action: suspend () -> Unit) {
         repeat(2) {
             try {
                 return action()
@@ -129,6 +159,10 @@ fun LinkDialog(
                 signIn()
             } catch (e: GoogleFileAccessRequired) {
                 pickFile(e.fileId)
+            } catch (_: NextcloudSetupNeeded) {
+                setUpNextcloud()
+            } catch (_: NextcloudSignInRequired) {
+                setUpNextcloud()
             }
         }
         action()
@@ -140,10 +174,12 @@ fun LinkDialog(
         error = null
         scope.launch {
             try {
-                withGoogle(action)
-                onDismiss()
+                withAccounts(action)
+                onDone()
             } catch (e: RemoteException) {
                 error = e.message
+                if (e is SharePasswordRequired) askPassword = true
+            } catch (_: StepCancelled) {
             } finally {
                 busy = false
             }
@@ -154,17 +190,30 @@ fun LinkDialog(
         if (url.isNotBlank()) run { connect(ShareLink(url.trim(), password.ifEmpty { null })) }
     }
 
+    // The setup takes this dialog's place while it is open; what was typed here is kept.
+    val pending = settingUp
+    if (pending != null && nextcloudSetup != null) {
+        nextcloudSetup({ pending.complete(false) }, { pending.complete(true) })
+        return
+    }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(intro, style = MaterialTheme.typography.bodyMedium)
+                if (createNextcloudLink != null) {
+                    Button(onClick = { run(createNextcloudLink) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(strings.createNextcloudLink)
+                    }
+                }
                 if (createDriveLink != null) {
                     Button(onClick = { run(createDriveLink) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(strings.createDriveLink)
                     }
-                    Text(strings.orPasteLink, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (createNextcloudLink != null || createDriveLink != null) {
+                    Text(strings.orPasteLink(drive = createDriveLink != null), style = MaterialTheme.typography.bodyMedium)
                 }
                 OutlinedTextField(
                     value = url,
@@ -172,19 +221,26 @@ fun LinkDialog(
                     label = { Text(strings.shareLink) },
                     placeholder = { Text("https://cloud.example.com/s/…") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(strings.sharePassword) },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = if (askPassword) ImeAction.Next else ImeAction.Done,
+                    ),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (askPassword) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text(strings.sharePassword) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
+                    )
+                    LaunchedEffect(Unit) { passwordFocus.requestFocus() }
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             }
         },
@@ -290,9 +346,20 @@ private fun FlowChips(sections: List<Section>, selected: String?, onSelect: (Str
     }
 }
 
-/** Theme and language for this device; each change applies and is saved at once. */
+/**
+ * Theme, language and the Nextcloud account for this device; each change applies and is saved at
+ * once. The account's actions open dialogs of their own.
+ */
 @Composable
-fun SettingsDialog(settings: Settings, onChange: (Settings) -> Unit, onDismiss: () -> Unit) {
+fun SettingsDialog(
+    settings: Settings,
+    nextcloud: NextcloudAccount?,
+    onChange: (Settings) -> Unit,
+    onConnectNextcloud: () -> Unit,
+    onChangeFolder: () -> Unit,
+    onDisconnectNextcloud: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.settings) },
@@ -316,6 +383,23 @@ fun SettingsDialog(settings: Settings, onChange: (Settings) -> Unit, onDismiss: 
                         LanguageChoice.Italian -> "Italiano"
                     }
                     ChoiceRow(label, settings.language == choice) { onChange(settings.copy(language = choice)) }
+                }
+                Text("Nextcloud", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+                if (nextcloud == null) {
+                    Text(strings.notConnected, style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = onConnectNextcloud) { Text(strings.connectNextcloud) }
+                } else {
+                    Text(
+                        strings.connectedAs(nextcloud.loginName, nextcloud.server.removePrefix("https://")),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    nextcloud.folder?.let { Text(strings.sharedListsGoTo(it), style = MaterialTheme.typography.bodyMedium) }
+                    Row {
+                        TextButton(onClick = onChangeFolder) { Text(strings.changeFolder) }
+                        TextButton(onClick = onDisconnectNextcloud) {
+                            Text(strings.disconnect, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             }
         },
